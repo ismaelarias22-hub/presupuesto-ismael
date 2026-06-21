@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Registro de Gastos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --ink:#0E1B2B;
+    --navy:#16294A;
+    --parchment:#F7F4EC;
+    --paper:#FCFAF4;
+    --gold:#B08D57;
+    --gold-soft:#D9C39A;
+    --sage:#5F7A63;
+    --rust:#A8503E;
+    --line:#DCD6C6;
+    --muted:#8A8576;
+    --shadow: 0 1px 2px rgba(14,27,43,.04), 0 8px 24px rgba(14,27,43,.06);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--parchment);
+    color:var(--ink);
+    font-family:'Inter', sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:60px;
+  }
+  ::selection{background:var(--gold-soft);}
+
+  .hero{
+    background:
+      radial-gradient(circle at 12% 0%, rgba(176,141,87,.18), transparent 45%),
+      linear-gradient(180deg, var(--ink) 0%, var(--navy) 100%);
+    color:#F2EEE2;
+    padding:46px 24px 38px;
+    position:relative;
+    overflow:hidden;
+  }
+  .hero::after{
+    content:"";
+    position:absolute;
+    left:0; right:0; bottom:0;
+    height:10px;
+    background-image: radial-gradient(circle, var(--parchment) 3.5px, transparent 3.6px);
+    background-size: 18px 18px;
+    background-position: 9px 0;
+  }
+  .hero-inner{max-width:880px;margin:0 auto;}
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--gold-soft);
+    margin:0 0 14px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:6px;height:6px;border-radius:50%;
+    background:var(--gold);
+    display:inline-block;
+  }
+  .hero h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:38px;
+    margin:0 0 6px;
+    letter-spacing:-.01em;
+  }
+  .hero p.sub{
+    margin:0 0 30px;
+    font-size:14.5px;
+    color:#C9C3B2;
+    max-width:480px;
+    line-height:1.55;
+  }
+  .ledger-strip{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    border-top:1px solid rgba(242,238,226,.16);
+    border-bottom:1px solid rgba(242,238,226,.16);
+  }
+  .ledger-cell{
+    padding:18px 18px 18px 0;
+    border-right:1px solid rgba(242,238,226,.16);
+  }
+  .ledger-cell:last-child{border-right:none;padding-right:0;}
+  .ledger-cell:not(:first-child){padding-left:18px;}
+  .ledger-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10.5px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:#9CA3B5;
+    margin-bottom:8px;
+  }
+  .ledger-value{
+    font-family:'Fraunces', serif;
+    font-size:27px;
+    font-weight:600;
+    color:#F7F4EC;
+    line-height:1.1;
+  }
+
+  .container{
+    max-width:880px;
+    margin:-22px auto 0;
+    padding:0 24px;
+    position:relative;
+    z-index:2;
+    display:grid;
+    grid-template-columns:340px 1fr;
+    gap:20px;
+  }
+  @media (max-width:760px){
+    .container{grid-template-columns:1fr;margin-top:-14px;}
+    .hero h1{font-size:30px;}
+    .ledger-strip{grid-template-columns:1fr;}
+    .ledger-cell{border-right:none;border-bottom:1px solid rgba(242,238,226,.16);padding:14px 0;}
+    .ledger-cell:not(:first-child){padding-left:0;}
+    .ledger-cell:last-child{border-bottom:none;}
+  }
+
+  .card{
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:10px;
+    box-shadow:var(--shadow);
+    padding:22px;
+    margin-bottom:20px;
+  }
+  .card h2{
+    font-family:'Fraunces', serif;
+    font-size:17px;
+    font-weight:600;
+    margin:0 0 18px;
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+  }
+  .card h2 .tag{
+    font-family:'JetBrains Mono', monospace;
+    font-size:10px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--muted);
+    font-weight:500;
+  }
+
+  form{display:flex;flex-direction:column;gap:13px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  label{
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    color:var(--muted);
+    display:block;
+    margin-bottom:5px;
+  }
+  input,select{
+    width:100%;
+    padding:10px 11px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-size:14px;
+    font-family:'Inter',sans-serif;
+    background:#fff;
+    color:var(--ink);
+    transition:border-color .15s, box-shadow .15s;
+  }
+  input:focus,select:focus{
+    outline:none;
+    border-color:var(--navy);
+    box-shadow:0 0 0 3px rgba(22,41,74,.08);
+  }
+  input[type="number"]{font-family:'JetBrains Mono', monospace;}
+  button{
+    border:none;
+    border-radius:6px;
+    font-family:'Inter', sans-serif;
+    font-weight:600;
+    font-size:13.5px;
+    cursor:pointer;
+    padding:12px;
+    transition:transform .12s, background .15s;
+  }
+  button:active{transform:scale(.98);}
+  .btn-primary{
+    background:var(--navy);
+    color:#F7F4EC;
+    margin-top:4px;
+  }
+  .btn-primary:hover{background:var(--ink);}
+  .btn-ghost{
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--navy);
+    font-size:12px;
+    padding:8px 12px;
+  }
+  .btn-ghost:hover{border-color:var(--navy);background:rgba(22,41,74,.04);}
+
+  .budget-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:12px;
+  }
+  .budget-row input{font-size:13px;}
+  .budget-row .cat-name{
+    flex:1;
+    font-size:13px;
+    font-weight:500;
+  }
+  .budget-row input[type=number]{
+    width:90px;
+    text-align:right;
+  }
+
+  .cat-progress{margin-bottom:14px;}
+  .cat-progress-top{
+    display:flex;
+    justify-content:space-between;
+    font-size:12.5px;
+    margin-bottom:6px;
+  }
+  .cat-progress-top .name{font-weight:600;}
+  .cat-progress-top .nums{
+    font-family:'JetBrains Mono', monospace;
+    color:var(--muted);
+  }
+  .bar-track{
+    height:6px;
+    background:var(--line);
+    border-radius:4px;
+    overflow:hidden;
+  }
+  .bar-fill{
+    height:100%;
+    border-radius:4px;
+    background:var(--sage);
+    transition:width .4s ease;
+  }
+  .bar-fill.over{background:var(--rust);}
+
+  .chart-wrap{position:relative;height:230px;}
+  .chart-wrap.tall{height:200px;}
+
+  .toolbar{
+    display:flex;
+    gap:10px;
+    margin-bottom:16px;
+    flex-wrap:wrap;
+  }
+  .toolbar select, .toolbar input{
+    width:auto;
+    flex:1;
+    min-width:120px;
+  }
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{
+    text-align:left;
+    font-family:'JetBrains Mono', monospace;
+    font-size:10px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--muted);
+    padding:0 8px 10px;
+    border-bottom:1px solid var(--line);
+    font-weight:500;
+  }
+  tbody td{
+    padding:11px 8px;
+    border-bottom:1px solid var(--line);
+    vertical-align:middle;
+  }
+  tbody tr:hover{background:rgba(176,141,87,.06);}
+  td.amount{
+    font-family:'JetBrains Mono', monospace;
+    font-weight:600;
+    text-align:right;
+    color:var(--navy);
+    white-space:nowrap;
+  }
+  .pill{
+    display:inline-block;
+    font-size:11px;
+    padding:3px 9px;
+    border-radius:20px;
+    background:rgba(22,41,74,.07);
+    color:var(--navy);
+    font-weight:600;
+  }
+  td.actions{text-align:right;white-space:nowrap;}
+  td.actions span{
+    cursor:pointer;
+    font-size:12px;
+    color:var(--muted);
+    margin-left:10px;
+    font-family:'JetBrains Mono', monospace;
+  }
+  td.actions span:hover{color:var(--rust);}
+  .empty-state{
+    text-align:center;
+    padding:48px 20px;
+    color:var(--muted);
+  }
+  .empty-state .glyph{
+    font-family:'Fraunces', serif;
+    font-size:34px;
+    color:var(--gold);
+    margin-bottom:8px;
+  }
+  .empty-state p{margin:4px 0 0;font-size:13px;}
+
+  .footer-note{
+    text-align:center;
+    font-family:'JetBrains Mono', monospace;
+    font-size:11px;
+    color:var(--muted);
+    margin-top:30px;
+    letter-spacing:.04em;
+  }
+  #status{
+    font-size:11.5px;
+    color:var(--muted);
+    text-align:center;
+    font-family:'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Libro de gastos personal</p>
+    <h1>Ledger</h1>
+    <p class="sub">Cada gasto, anotado con la precisión de un libro mayor. Mira hacia atrás 30 días y entiende exactamente a dónde se fue tu dinero.</p>
+
+    <div class="ledger-strip">
+      <div class="ledger-cell">
+        <div class="ledger-label">Total · 30 días</div>
+        <div class="ledger-value" id="h-total">₡0</div>
+      </div>
+      <div class="ledger-cell">
+        <div class="ledger-label">Promedio diario</div>
+        <div class="ledger-value" id="h-promedio">₡0</div>
+      </div>
+      <div class="ledger-cell">
+        <div class="ledger-label">Categoría principal</div>
+        <div class="ledger-value" id="h-top" style="font-size:20px;">—</div>
+      </div>
+    </div>
+
+    <div id="drive-bar" style="margin-top:18px;display:flex;align-items:center;gap:12px;">
+      <button id="btn-drive-connect" type="button" style="background:var(--gold);color:var(--ink);border:none;border-radius:6px;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;">
+        Conectar con Google Drive
+      </button>
+      <span id="drive-status" style="font-family:'JetBrains Mono', monospace;font-size:11px;color:#C9C3B2;"></span>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <div>
+    <div class="card">
+      <h2>Nuevo gasto <span class="tag">registro</span></h2>
+      <form id="form-gasto">
+        <div class="row2">
+          <div>
+            <label>Fecha</label>
+            <input type="date" id="fecha" required>
+          </div>
+          <div>
+            <label>Monto (₡)</label>
+            <input type="number" id="monto" min="0" step="any" placeholder="0.00" required>
+          </div>
+        </div>
+        <div>
+          <label>Categoría</label>
+          <select id="categoria" required>
+            <option value="">Selecciona...</option>
+          </select>
+        </div>
+        <div>
+          <label>Descripción (opcional)</label>
+          <input type="text" id="descripcion" placeholder="Ej: Almuerzo, gasolina...">
+        </div>
+        <button type="submit" class="btn-primary">Agregar al libro</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Presupuestos <span class="tag">mensual</span></h2>
+      <div id="budget-list"></div>
+      <button type="button" class="btn-ghost" id="btn-save-budgets" style="width:100%;margin-top:4px;">Guardar presupuestos</button>
+    </div>
+
+    <div class="card">
+      <h2>Categorías por uso <span class="tag">30 días</span></h2>
+      <div id="cat-progress-list"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Distribución por categoría <span class="tag">dona</span></h2>
+      <div class="chart-wrap"><canvas id="chartDona"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>Tendencia diaria <span class="tag">30 días</span></h2>
+      <div class="chart-wrap tall"><canvas id="chartLinea"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>Historial completo <span class="tag" id="badge-count">0 movimientos</span></h2>
+      <div class="toolbar">
+        <select id="filtro-categoria">
+          <option value="">Todas las categorías</option>
+        </select>
+        <input type="text" id="filtro-busqueda" placeholder="Buscar descripción...">
+        <button type="button" class="btn-ghost" id="btn-export">Exportar CSV</button>
+      </div>
+      <div class="toolbar" style="margin-top:-6px;">
+        <button type="button" class="btn-ghost" id="btn-backup" style="flex:1;">Exportar respaldo (.json)</button>
+        <button type="button" class="btn-ghost" id="btn-restore" style="flex:1;">Importar respaldo</button>
+        <input type="file" id="file-restore" accept="application/json" style="display:none;">
+      </div>
+      <p style="font-size:11.5px;color:var(--muted);margin:0 0 16px;line-height:1.5;">
+        Si usas modo incógnito o un navegador con limpieza automática de datos (como DuckDuckGo), descarga tu respaldo seguido y guárdalo en Drive — así nunca pierdes el historial.
+      </p>
+      <table>
+        <thead>
+          <tr><th>Fecha</th><th>Categoría</th><th>Descripción</th><th style="text-align:right;">Monto</th><th></th></tr>
+        </thead>
+        <tbody id="tabla-gastos"></tbody>
+      </table>
+      <div class="empty-state" id="empty-msg" style="display:none;">
+        <div class="glyph">§</div>
+        <p>El libro está en blanco. Registra tu primer gasto arriba.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer-note" id="status">cargando libro...</div>
+
+<script>
+const CATEGORIAS = ["Alimentación","Transporte","Vivienda","Servicios","Entretenimiento","Salud","Ropa","Educación","Otros"];
+const COLORES = ['#16294A','#B08D57','#5F7A63','#A8503E','#6B7FA0','#C9A45C','#7C9885','#8D6E5B','#3D5A80'];
+
+let gastos = [];
+let presupuestos = {};
+let chartDona = null;
+let chartLinea = null;
+
+function hoyISO(){ return new Date().toISOString().slice(0,10); }
+function fechaLimite30(){
+  const d = new Date();
+  d.setDate(d.getDate()-29);
+  return d.toISOString().slice(0,10);
+}
+function formatoColones(n){
+  return '₡' + Number(n).toLocaleString('es-CR', {minimumFractionDigits:0, maximumFractionDigits:2});
+}
+
+function poblarCategorias(){
+  const sel = document.getElementById('categoria');
+  const filtro = document.getElementById('filtro-categoria');
+  CATEGORIAS.forEach(c=>{
+    const o1 = document.createElement('option'); o1.value=c; o1.textContent=c;
+    sel.appendChild(o1);
+    const o2 = document.createElement('option'); o2.value=c; o2.textContent=c;
+    filtro.appendChild(o2);
+  });
+}
+
+document.getElementById('fecha').value = hoyISO();
+
+function cargarDatos(){
+  try{
+    const r1 = localStorage.getItem('gastos-lista');
+    gastos = r1 ? JSON.parse(r1) : [];
+  }catch(e){ gastos = []; }
+  try{
+    const r2 = localStorage.getItem('gastos-presupuestos');
+    presupuestos = r2 ? JSON.parse(r2) : {};
+  }catch(e){ presupuestos = {}; }
+
+  renderBudgetInputs();
+  renderTodo();
+  document.getElementById('status').textContent = 'libro al día · guardado automático en este navegador';
+}
+
+function guardarGastos(){
+  try{ localStorage.setItem('gastos-lista', JSON.stringify(gastos)); }
+  catch(e){ document.getElementById('status').textContent = 'error al guardar — intenta de nuevo'; }
+}
+function guardarPresupuestos(){
+  try{ localStorage.setItem('gastos-presupuestos', JSON.stringify(presupuestos)); }
+  catch(e){ document.getElementById('status').textContent = 'error al guardar presupuestos'; }
+}
+
+function renderBudgetInputs(){
+  const cont = document.getElementById('budget-list');
+  cont.innerHTML = '';
+  CATEGORIAS.forEach(c=>{
+    const row = document.createElement('div');
+    row.className = 'budget-row';
+    row.innerHTML = `
+      <span class="cat-name">${c}</span>
+      <input type="number" min="0" step="any" data-cat="${c}" placeholder="₡ mensual" value="${presupuestos[c] ?? ''}">
+    `;
+    cont.appendChild(row);
+  });
+}
+
+document.getElementById('btn-save-budgets').addEventListener('click', async ()=>{
+  document.querySelectorAll('#budget-list input').forEach(inp=>{
+    const cat = inp.dataset.cat;
+    const val = parseFloat(inp.value);
+    if(val > 0) presupuestos[cat] = val;
+    else delete presupuestos[cat];
+  });
+  await guardarPresupuestos();
+  renderTodo();
+  document.getElementById('status').textContent = 'presupuestos guardados';
+});
+
+function getRecientes(){
+  const limite = fechaLimite30();
+  return gastos.filter(g => g.fecha >= limite);
+}
+
+function renderTodo(){
+  renderHero();
+  renderDona();
+  renderLinea();
+  renderCatProgress();
+  renderTabla();
+}
+
+function renderHero(){
+  const recientes = getRecientes();
+  const total = recientes.reduce((s,g)=> s + Number(g.monto), 0);
+  const promedio = total / 30;
+
+  const porCat = {};
+  recientes.forEach(g=> porCat[g.categoria] = (porCat[g.categoria]||0) + Number(g.monto));
+  let topCat = '—';
+  const keys = Object.keys(porCat);
+  if(keys.length){
+    topCat = keys.reduce((a,b)=> porCat[a] > porCat[b] ? a : b);
+  }
+
+  document.getElementById('h-total').textContent = formatoColones(total);
+  document.getElementById('h-promedio').textContent = formatoColones(promedio);
+  document.getElementById('h-top').textContent = topCat;
+}
+
+function renderDona(){
+  const recientes = getRecientes();
+  const porCat = {};
+  recientes.forEach(g=> porCat[g.categoria] = (porCat[g.categoria]||0) + Number(g.monto));
+  const labels = Object.keys(porCat);
+  const data = Object.values(porCat);
+
+  if(chartDona) chartDona.destroy();
+  const ctx = document.getElementById('chartDona');
+
+  if(labels.length === 0){
+    ctx.getContext('2d').clearRect(0,0,ctx.width,ctx.height);
+    return;
+  }
+
+  chartDona = new Chart(ctx, {
+    type:'doughnut',
+    data:{
+      labels,
+      datasets:[{
+        data,
+        backgroundColor: labels.map((_,i)=> COLORES[i % COLORES.length]),
+        borderColor:'#FCFAF4',
+        borderWidth:2
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      cutout:'62%',
+      plugins:{
+        legend:{ position:'bottom', labels:{ font:{family:'Inter', size:11.5}, boxWidth:10, padding:12 } },
+        tooltip:{ callbacks:{ label: c => ' ' + c.label + ': ' + formatoColones(c.raw) } }
+      }
+    }
+  });
+}
+
+function renderLinea(){
+  const limite = fechaLimite30();
+  const dias = [];
+  for(let i=0;i<30;i++){
+    const d = new Date(limite);
+    d.setDate(d.getDate()+i);
+    dias.push(d.toISOString().slice(0,10));
+  }
+  const totalesPorDia = dias.map(d=>{
+    return gastos.filter(g=>g.fecha===d).reduce((s,g)=> s+Number(g.monto), 0);
+  });
+
+  if(chartLinea) chartLinea.destroy();
+  const ctx = document.getElementById('chartLinea');
+
+  chartLinea = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: dias.map(d=> d.slice(5)),
+      datasets:[{
+        data: totalesPorDia,
+        borderColor:'#16294A',
+        backgroundColor:'rgba(22,41,74,.07)',
+        fill:true,
+        tension:.35,
+        pointRadius:0,
+        borderWidth:2
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      scales:{
+        x:{ ticks:{ font:{size:9, family:'JetBrains Mono'}, maxTicksLimit:8 }, grid:{display:false} },
+        y:{ ticks:{ font:{size:9, family:'JetBrains Mono'}, callback:v=>'₡'+v }, grid:{ color:'#EDE8D9' } }
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{ label: c => formatoColones(c.raw) } }
+      }
+    }
+  });
+}
+
+function renderCatProgress(){
+  const recientes = getRecientes();
+  const porCat = {};
+  recientes.forEach(g=> porCat[g.categoria] = (porCat[g.categoria]||0) + Number(g.monto));
+
+  const cont = document.getElementById('cat-progress-list');
+  cont.innerHTML = '';
+
+  const cats = CATEGORIAS.filter(c => porCat[c] > 0 || presupuestos[c] > 0);
+
+  if(cats.length === 0){
+    cont.innerHTML = '<p style="font-size:12.5px;color:var(--muted);margin:0;">Sin movimientos en los últimos 30 días.</p>';
+    return;
+  }
+
+  cats.forEach(c=>{
+    const gastado = porCat[c] || 0;
+    const presu = presupuestos[c];
+    const pct = presu ? Math.min((gastado/presu)*100, 100) : null;
+    const over = presu && gastado > presu;
+
+    const div = document.createElement('div');
+    div.className = 'cat-progress';
+    div.innerHTML = `
+      <div class="cat-progress-top">
+        <span class="name">${c}</span>
+        <span class="nums">${formatoColones(gastado)}${presu ? ' / ' + formatoColones(presu) : ''}</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill ${over?'over':''}" style="width:${presu ? pct : (gastado>0?100:0)}%;${!presu?'background:var(--line);':''}"></div>
+      </div>
+    `;
+    cont.appendChild(div);
+  });
+}
+
+function renderTabla(){
+  const filtroCat = document.getElementById('filtro-categoria').value;
+  const busqueda = document.getElementById('filtro-busqueda').value.toLowerCase();
+
+  let lista = [...gastos].sort((a,b)=> b.fecha.localeCompare(a.fecha) || b.id - a.id);
+
+  if(filtroCat) lista = lista.filter(g=> g.categoria === filtroCat);
+  if(busqueda) lista = lista.filter(g=> (g.descripcion||'').toLowerCase().includes(busqueda));
+
+  const tbody = document.getElementById('tabla-gastos');
+  tbody.innerHTML = '';
+  document.getElementById('empty-msg').style.display = lista.length ? 'none' : 'block';
+  document.getElementById('badge-count').textContent = lista.length + (lista.length===1 ? ' movimiento' : ' movimientos');
+
+  lista.forEach(g=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);">${g.fecha}</td>
+      <td><span class="pill">${g.categoria}</span></td>
+      <td>${g.descripcion || '<span style="color:var(--muted)">—</span>'}</td>
+      <td class="amount">${formatoColones(g.monto)}</td>
+      <td class="actions"><span onclick="eliminarGasto(${g.id})">eliminar</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function eliminarGasto(id){
+  gastos = gastos.filter(g => g.id !== id);
+  await guardarGastos();
+  renderTodo();
+}
+
+document.getElementById('filtro-categoria').addEventListener('change', renderTabla);
+document.getElementById('filtro-busqueda').addEventListener('input', renderTabla);
+
+document.getElementById('btn-export').addEventListener('click', ()=>{
+  if(gastos.length === 0) return;
+  const header = 'Fecha,Categoria,Descripcion,Monto\n';
+  const rows = gastos
+    .sort((a,b)=> a.fecha.localeCompare(b.fecha))
+    .map(g => `${g.fecha},"${g.categoria}","${(g.descripcion||'').replace(/"/g,'""')}",${g.monto}`)
+    .join('\n');
+  const blob = new Blob([header + rows], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `gastos_${hoyISO()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btn-backup').addEventListener('click', ()=>{
+  const respaldo = {
+    version: 1,
+    fecha_exportado: new Date().toISOString(),
+    gastos,
+    presupuestos
+  };
+  const blob = new Blob([JSON.stringify(respaldo, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `respaldo_gastos_${hoyISO()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  document.getElementById('status').textContent = 'respaldo descargado · guárdalo en Drive';
+});
+
+document.getElementById('btn-restore').addEventListener('click', ()=>{
+  document.getElementById('file-restore').click();
+});
+
+document.getElementById('file-restore').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    try{
+      const datos = JSON.parse(ev.target.result);
+      if(!Array.isArray(datos.gastos)) throw new Error('formato inválido');
+
+      const reemplazar = confirm(
+        `Este respaldo tiene ${datos.gastos.length} movimientos del ${new Date(datos.fecha_exportado).toLocaleDateString('es-CR')}.\n\n` +
+        `Aceptar = REEMPLAZAR todo lo actual con el respaldo\n` +
+        `Cancelar = FUSIONAR (agregar los del respaldo sin borrar lo actual)`
+      );
+
+      if(reemplazar){
+        gastos = datos.gastos;
+        presupuestos = datos.presupuestos || {};
+      }else{
+        const idsExistentes = new Set(gastos.map(g=>g.id));
+        datos.gastos.forEach(g=>{
+          if(!idsExistentes.has(g.id)) gastos.push(g);
+        });
+        presupuestos = { ...presupuestos, ...(datos.presupuestos||{}) };
+      }
+
+      guardarGastos();
+      guardarPresupuestos();
+      renderBudgetInputs();
+      renderTodo();
+      document.getElementById('status').textContent = 'respaldo restaurado correctamente';
+    }catch(err){
+      document.getElementById('status').textContent = 'el archivo de respaldo no es válido';
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+document.getElementById('form-gasto').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const fecha = document.getElementById('fecha').value;
+  const monto = parseFloat(document.getElementById('monto').value);
+  const categoria = document.getElementById('categoria').value;
+  const descripcion = document.getElementById('descripcion').value.trim();
+
+  if(!fecha || !monto || !categoria) return;
+
+  gastos.push({ id: Date.now(), fecha, monto, categoria, descripcion });
+  await guardarGastos();
+  renderTodo();
+
+  document.getElementById('monto').value = '';
+  document.getElementById('descripcion').value = '';
+  document.getElementById('categoria').value = '';
+  document.getElementById('fecha').value = hoyISO();
+  document.getElementById('monto').focus();
+});
+
+poblarCategorias();
+cargarDatos();
+
+/* =========================================================
+   GOOGLE DRIVE — guarda siempre en el mismo archivo
+   ========================================================= */
+const DRIVE_CLIENT_ID = "323879633088-7bloshppoht7hhm7s9gn0b8b91cuqtvl.apps.googleusercontent.com";
+const DRIVE_FILENAME = "gastos_ledger_datos.json";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+
+let driveAccessToken = null;
+let driveFileId = null;
+let tokenClient = null;
+let driveGuardadoPendiente = false;
+
+function driveSetStatus(txt){
+  document.getElementById('drive-status').textContent = txt;
+}
+
+function initGoogleDrive(){
+  if(!window.google || !google.accounts){
+    setTimeout(initGoogleDrive, 300);
+    return;
+  }
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: DRIVE_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: async (resp)=>{
+      if(resp.error){
+        driveSetStatus('no se pudo conectar');
+        return;
+      }
+      driveAccessToken = resp.access_token;
+      document.getElementById('btn-drive-connect').textContent = 'Conectado ✓';
+      driveSetStatus('buscando tu archivo en Drive...');
+      await driveEncontrarOCrearArchivo();
+    }
+  });
+}
+
+document.getElementById('btn-drive-connect').addEventListener('click', ()=>{
+  if(!tokenClient){ driveSetStatus('cargando Google...'); return; }
+  tokenClient.requestAccessToken();
+});
+
+async function driveFetch(url, opts={}){
+  opts.headers = Object.assign({}, opts.headers, {
+    'Authorization': 'Bearer ' + driveAccessToken
+  });
+  return fetch(url, opts);
+}
+
+// Busca el archivo por nombre exacto; si no existe, lo crea vacío
+async function driveEncontrarOCrearArchivo(){
+  try{
+    const q = encodeURIComponent(`name='${DRIVE_FILENAME}' and trashed=false`);
+    const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)`);
+    const data = await res.json();
+
+    if(data.files && data.files.length > 0){
+      driveFileId = data.files[0].id;
+      driveSetStatus('archivo encontrado · descargando...');
+      await driveDescargarYFusionar();
+    }else{
+      driveSetStatus('creando archivo en tu Drive...');
+      await driveCrearArchivoNuevo();
+    }
+  }catch(e){
+    driveSetStatus('error al conectar con Drive');
+  }
+}
+
+async function driveCrearArchivoNuevo(){
+  const metadata = { name: DRIVE_FILENAME, mimeType: 'application/json' };
+  const contenido = JSON.stringify({ gastos, presupuestos }, null, 2);
+
+  const boundary = '-------ledger_boundary';
+  const body =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\nContent-Type: application/json\r\n\r\n${contenido}\r\n--${boundary}--`;
+
+  const res = await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body
+  });
+  const data = await res.json();
+  driveFileId = data.id;
+  driveSetStatus('sincronizado con Drive ✓ · ' + DRIVE_FILENAME);
+}
+
+async function driveDescargarYFusionar(){
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`);
+  if(!res.ok){
+    driveSetStatus('sincronizado con Drive ✓ · ' + DRIVE_FILENAME);
+    return;
+  }
+  try{
+    const remoto = await res.json();
+    const remotoGastos = Array.isArray(remoto.gastos) ? remoto.gastos : [];
+    const idsLocales = new Set(gastos.map(g=>g.id));
+    remotoGastos.forEach(g=>{
+      if(!idsLocales.has(g.id)) gastos.push(g);
+    });
+    presupuestos = Object.assign({}, remoto.presupuestos||{}, presupuestos);
+
+    guardarGastos();
+    guardarPresupuestos();
+    renderBudgetInputs();
+    renderTodo();
+    driveSetStatus('sincronizado con Drive ✓ · ' + DRIVE_FILENAME);
+  }catch(e){
+    driveSetStatus('sincronizado con Drive ✓ · ' + DRIVE_FILENAME);
+  }
+}
+
+async function driveGuardarAhora(){
+  if(!driveAccessToken || !driveFileId) return;
+  driveSetStatus('guardando en Drive...');
+  try{
+    const contenido = JSON.stringify({ gastos, presupuestos }, null, 2);
+    await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: contenido
+    });
+    driveSetStatus('sincronizado con Drive ✓ · ' + DRIVE_FILENAME);
+  }catch(e){
+    driveSetStatus('no se pudo guardar en Drive, reintentando...');
+  }
+}
+
+// engancha el guardado en Drive cada vez que se guarda localmente
+const _guardarGastosOriginal = guardarGastos;
+guardarGastos = function(){
+  _guardarGastosOriginal();
+  if(driveAccessToken && driveFileId) driveGuardarAhora();
+};
+const _guardarPresupuestosOriginal = guardarPresupuestos;
+guardarPresupuestos = function(){
+  _guardarPresupuestosOriginal();
+  if(driveAccessToken && driveFileId) driveGuardarAhora();
+};
+
+initGoogleDrive();
+</script>
+
+</body>
+</html>
