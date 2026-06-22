@@ -888,8 +888,10 @@ async function driveEncontrarOCrearArchivo(){
       driveSetStatus('creando archivo en tu Drive...');
       await driveCrearArchivoNuevo();
     }
+    // Empuja cualquier cambio que se haya hecho localmente mientras se conectaba
+    if(driveFileId) await driveGuardarAhora();
   }catch(e){
-    driveSetStatus('error al conectar con Drive');
+    driveSetStatus('error al conectar con Drive: ' + (e.message || e));
   }
 }
 
@@ -915,25 +917,33 @@ async function driveCrearArchivoNuevo(){
 async function driveDescargarYFusionar(){
   const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`);
   if(!res.ok){
-    driveSetStatus('sincronizado con Drive ✓ · ' + DRIVE_FILENAME);
+    driveSetStatus(`error al leer archivo (HTTP ${res.status})`);
     return;
   }
   try{
-    const remoto = await res.json();
+    const textoRaw = await res.text();
+    let remoto;
+    try{
+      remoto = JSON.parse(textoRaw);
+    }catch(parseErr){
+      driveSetStatus('el archivo en Drive no es JSON válido: ' + textoRaw.slice(0,60));
+      return;
+    }
     const remotoGastos = Array.isArray(remoto.gastos) ? remoto.gastos : [];
     const idsLocales = new Set(gastos.map(g=>g.id));
+    let agregados = 0;
     remotoGastos.forEach(g=>{
-      if(!idsLocales.has(g.id)) gastos.push(g);
+      if(!idsLocales.has(g.id)){ gastos.push(g); agregados++; }
     });
     presupuestos = Object.assign({}, remoto.presupuestos||{}, presupuestos);
 
-    guardarGastos();
-    guardarPresupuestos();
+    _guardarGastosOriginal();
+    _guardarPresupuestosOriginal();
     renderBudgetInputs();
     renderTodo();
-    driveSetStatus('sincronizado con Drive ✓ · ' + DRIVE_FILENAME);
+    driveSetStatus(`sincronizado ✓ · ${remotoGastos.length} en Drive, ${agregados} nuevos agregados`);
   }catch(e){
-    driveSetStatus('sincronizado con Drive ✓ · ' + DRIVE_FILENAME);
+    driveSetStatus('error inesperado: ' + (e.message || e));
   }
 }
 
